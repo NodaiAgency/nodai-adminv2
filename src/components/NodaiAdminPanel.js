@@ -21,7 +21,6 @@ const NODAI_DATA = {
 };
 
 /* ─────────────── UTILIDADES INTELIGENTES DE FORMATEO ─────────────── */
-// Resuelve los IDs de Airtable cruzando los datos automáticamente
 const resolveName = (v, data) => {
   let val = Array.isArray(v) ? v[0] : v;
   if (typeof val === "string" && val.startsWith("rec")) {
@@ -30,7 +29,7 @@ const resolveName = (v, data) => {
     if (cliente) return cliente.Nombre_negocio || cliente.Nombre;
     const vendedor = data.vendedores?.find(vd => vd.id === val);
     if (vendedor) return vendedor.Nombre;
-    return "—"; // Si no lo encuentra, muestra un guion en vez de 'rec...'
+    return "—"; 
   }
   return val ?? "—";
 };
@@ -65,7 +64,7 @@ function KPICard({ label, value, sub, accent }) {
   );
 }
 
-/* ─────────────── NAVEGACIÓN CORREGIDA CON EMOJIS ─────────────── */
+/* ─────────────── NAVEGACIÓN CON EMOJIS ─────────────── */
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: "📊" },
   { key: "vendedores", label: "Vendedores", icon: "👥" },
@@ -88,23 +87,34 @@ export default function NodaiAdminPanel() {
     else if (pass === "nodai2025") setUser({ email, name: email.split('@')[0], role: "vendedor" });
   };
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  // ACTUALIZACIÓN: Función de carga con caché desactivada y modo silencioso
+  const loadData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     const results = {};
     for (const [key, name] of Object.entries(AIRTABLE_CONFIG.tables)) {
       try {
         const res = await fetch(`https://api.airtable.com/v0/${AIRTABLE_CONFIG.baseId}/${encodeURIComponent(name)}`, {
-          headers: { Authorization: `Bearer ${AIRTABLE_CONFIG.apiKey}` }
+          headers: { Authorization: `Bearer ${AIRTABLE_CONFIG.apiKey}` },
+          cache: "no-store" // <--- Esto obliga a pedir datos frescos siempre
         });
         const json = await res.json();
         results[key] = json.records?.map(r => ({ id: r.id, ...r.fields })) || [];
       } catch (e) { console.error(e); }
     }
     setData(results);
-    setLoading(false);
+    if (!isSilent) setLoading(false);
   }, []);
 
-  useEffect(() => { if (user) loadData(); }, [user, loadData]);
+  // ACTUALIZACIÓN: Auto-refresco cada 60 segundos
+  useEffect(() => { 
+    if (user) {
+      loadData(false); // Carga inicial
+      const interval = setInterval(() => {
+        loadData(true); // Refresco silencioso de fondo
+      }, 60000); 
+      return () => clearInterval(interval);
+    }
+  }, [user, loadData]);
 
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 
@@ -134,11 +144,24 @@ export default function NodaiAdminPanel() {
             )
           ))}
         </nav>
-        <button onClick={() => setUser(null)} style={{ padding: "20px", background: "none", border: "none", color: "#5a5a6e", cursor: "pointer", fontSize: 12 }}>Cerrar Sesión</button>
+        
+        {/* ACTUALIZACIÓN: Botones de sincronización y cierre de sesión */}
+        <div style={{ padding: "20px", borderTop: "1px solid #1a1a22", display: "flex", flexDirection: "column", gap: 12 }}>
+          <button onClick={() => loadData(false)} disabled={loading} style={{ 
+            width: "100%", padding: "10px", background: "#10b98115", color: "#10b981", border: "1px solid #10b98140", 
+            borderRadius: "8px", cursor: "pointer", fontSize: 12, fontWeight: 600, transition: "0.2s" 
+          }}>
+            {loading ? "Sincronizando..." : "🔄 Sincronizar Datos"}
+          </button>
+          <button onClick={() => setUser(null)} style={{ padding: "10px", background: "none", border: "none", color: "#5a5a6e", cursor: "pointer", fontSize: 12, textAlign: "left" }}>
+            Cerrar Sesión
+          </button>
+        </div>
       </div>
 
       {/* Main Area */}
-      <div style={{ flex: 1, padding: "40px", overflowY: "auto" }}>
+      <div style={{ flex: 1, padding: "40px", overflowY: "auto", position: "relative" }}>
+        
         {page === "dashboard" && (
           <div>
             <h1 style={{ fontSize: 24, marginBottom: 8, color: "#f0f0f5" }}>Panel de Control — {user.name}</h1>
