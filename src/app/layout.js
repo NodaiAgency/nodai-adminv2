@@ -1,3 +1,5 @@
+import { SpeedInsights } from '@vercel/speed-insights/next';
+
 export const metadata = {
   title: "Nodai Agency — Admin Panel",
   description: "Panel de administración de Nodai Agency",
@@ -20,7 +22,10 @@ export default function RootLayout({ children }) {
           ::-webkit-scrollbar-thumb:hover { background: #3a3a45; }
         `}</style>
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <SpeedInsights />
+      </body>
     </html>
   );
 }
